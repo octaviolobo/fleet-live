@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket   
+from fastapi import FastAPI, WebSocket , WebSocketDisconnect
 import simulador 
 from contextlib import asynccontextmanager
 import asyncio
@@ -12,16 +12,27 @@ class ConnectionManager:
     def disconnect(self,websocket):
         self.connections.remove(websocket)
     async def broadcast(self,data):
-        for connection in self.connections:
-            await connection.send_json(data)
+        for connection in self.connections.copy():
+            try:
+                await connection.send_json(data)
+            except WebSocketDisconnect:
+                self.disconnect(connection)
 manager = ConnectionManager()
+
+async def broadcast_fleet():
+    while True:
+        await manager.broadcast(simulador.fleet_snapshot())
+        await asyncio.sleep(1)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    #load the trucks
+    
+    
     tasks = []
-    for t in simulador.TRUCKS:
-        Task = asyncio.create_task(simulador.simulate_truck_movement(t))
-        tasks.append(Task)
+    #snapshot of the whole fleet one time
+    tasks.append(asyncio.create_task(broadcast_fleet()))
+    #load the trucks
+    for t in simulador.TRUCKS:       
+        tasks.append( asyncio.create_task(simulador.simulate_truck_movement(t)))
     yield
     #clear the trucks when applications stops 
     for c in tasks:
@@ -38,5 +49,8 @@ def truck_json():
 @app.websocket("/ws/fleet")
 async def truckinfo(websocket:WebSocket):
     await manager.connect(websocket)
-    while True:
-        await websocket.receive_text()
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
