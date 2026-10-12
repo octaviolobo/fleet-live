@@ -15,7 +15,7 @@ class ConnectionManager:
         for connection in self.connections.copy():
             try:
                 await connection.send_json(data)
-            except WebSocketDisconnect:
+            except Exception:
                 self.disconnect(connection)
 manager = ConnectionManager()
 
