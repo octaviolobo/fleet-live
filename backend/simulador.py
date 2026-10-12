@@ -8,7 +8,7 @@ from math import sqrt
 
 ROUTE = [
         (50, 20),
-        (55, 22),
+        (90, 90),
         (70, 40),
     ]
 
